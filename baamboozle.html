@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>BaaBoozle 翻牌遊戲 · Hibernation</title>
+
+<style>
+  :root{
+    --red:#e53935; --blue:#1e88e5; --green:#43a047; --purple:#8e24aa;
+    --gold:#ffd600; --bg:#0b1c30; --panel:#102842; --ok:#42a5f5; --bad:#ff1744;
+    --bw:min(1000px, calc((100vh - 330px) * 1.0667));
+  }
+  *{box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;}
+  body{
+    font-family:"Microsoft JhengHei","PingFang TC","Noto Sans TC",sans-serif;
+    background:var(--bg); color:#fff; min-height:100vh;
+    display:flex; flex-direction:column; align-items:center;
+    padding:8px; overflow-x:hidden;
+    user-select:none; -webkit-user-select:none;
+  }
+  .hidden{display:none !important;}
+  button{font-family:inherit; cursor:pointer; border:none; color:#fff; min-width:44px; min-height:44px;}
+
+  .title{
+    font-size:clamp(.9rem,2.8vw,1.4rem); font-weight:900; color:var(--gold);
+    letter-spacing:2px; text-align:center; margin:0 0 4px; text-shadow:0 3px 0 #000;
+  }
+
+  /* ---------- 工具列 ---------- */
+  .topbar{display:flex; gap:6px; margin-bottom:5px;}
+  .tg{
+    flex:1; padding:4px 3px; min-height:34px; border-radius:9px;
+    background:#17324f; border:3px solid #2b4f75; color:#9fb6cd;
+    font-size:clamp(.62rem,2.1vw,.85rem); font-weight:800; letter-spacing:1px;
+    white-space:nowrap; overflow:hidden;
+  }
+  .tg.on{background:#1d5a3a; border-color:#4caf7d; color:#d7ffe9;}
+  .tg.restart{flex:1.1; background:linear-gradient(180deg,#e65100,#bf360c); border-color:#ffb74d;}
+
+  /* ---------- 玩家列 ---------- */
+  .players{display:flex; gap:6px; margin-bottom:5px;}
+  .pl{
+    flex:1; min-width:0; border-radius:9px; padding:3px 2px; text-align:center;
+    border:3px solid; background:#0f2740; transition:.18s;
+  }
+  .pl .n{font-size:clamp(.56rem,1.9vw,.78rem); font-weight:900; letter-spacing:1px;}
+  .pl .s{font-size:clamp(.95rem,3.2vw,1.45rem); font-weight:900; line-height:1.05;
+    font-variant-numeric:tabular-nums; text-shadow:0 2px 0 #0008;}
+  .pl .g{font-size:clamp(.48rem,1.8vw,.7rem); font-weight:800; color:var(--gold);}
+  .pl.on{
+    animation:onBlink 1.1s ease-in-out infinite;
+    transform:translateY(-2px);
+  }
+  @keyframes onBlink{
+    0%,100%{box-shadow:0 0 0 3px rgba(255,255,255,.95), 0 0 14px rgba(255,255,255,.55); opacity:1;}
+    50%    {box-shadow:0 0 0 6px rgba(255,214,0,.95),  0 0 26px rgba(255,214,0,.9); opacity:.82;}
+  }
+  .pl.out{opacity:.55;}
+  .pl.out .n, .pl.out .s{color:#7b8794; text-shadow:none;}
+  .pl.out .g{color:#90a4ae;}
+
+  /* ---------- 狀態列 ---------- */
+  .status{
+    margin-bottom:5px;
+    background:#0f2740; border:3px solid #2b6cb0; border-radius:10px;
+    padding:4px 10px; text-align:center; font-weight:900;
+    font-size:clamp(.72rem,2.4vw,1rem); letter-spacing:1px;
+  }
+  .status .hi{color:var(--gold);}
+
+  /* ---------- 牌桌 ---------- */
+.topbar,.players,.status,.board{ width:100%; max-width:var(--bw); }
+  .board{
+    perspective:1000px;
+    display:grid; grid-template-columns:repeat(4,1fr); grid-template-rows:repeat(5,auto);
+    gap:6px; align-items:start;
+  }
+  .card{
+    position:relative; display:block; padding:0; background:none; border:none;
+    width:100%; aspect-ratio:4/3; cursor:pointer; outline:none;
+  }
+  .card .inner{
+    display:block; position:relative; width:100%; height:100%;
+    transform-style:preserve-3d; transition:transform .42s cubic-bezier(.4,.2,.2,1);
+  }
+  .card.flip .inner{transform:rotateY(180deg);}
+  .face{
+    position:absolute; inset:0; backface-visibility:hidden; -webkit-backface-visibility:hidden;
+    border-radius:11px; border:3px solid;
+    display:flex; align-items:center; justify-content:center; text-align:center;
+    padding:4px; font-weight:900; line-height:1.2; overflow-wrap:anywhere;
+    font-size:clamp(.62rem,2.1vw,1rem);
+  }
+  .back{
+    font-size:clamp(1rem,3vw,1.4rem);
+    flex-direction:column; gap:1px;
+  }
+  .back .no{font-size:clamp(1.25rem,3.8vw,2rem); font-weight:900; line-height:1; color:var(--gold); text-shadow:0 2px 0 #0006;}
+  .back .sub{font-size:clamp(.5rem,1.6vw,.72rem); letter-spacing:2px; font-weight:900; opacity:.75;}
+  .front{transform:rotateY(180deg);}
+  .front.word{background:#f7fbff; color:#12314f;}
+
+  .card.g0 .back{background:linear-gradient(180deg,#e53935,#a31212); color:#fff;}
+  .card.g1 .back{background:linear-gradient(180deg,#1e88e5,#0d47a1); color:#fff;}
+  .card.g2 .back{background:linear-gradient(180deg,#43a047,#1b5e20); color:#fff;}
+  .card.g3 .back{background:linear-gradient(180deg,#8e24aa,#4a148c); color:#fff;}
+  .card.g0 .front{border-color:var(--red);}
+  .card.g1 .front{border-color:var(--blue);}
+  .card.g2 .front{border-color:var(--green);}
+  .card.g3 .front{border-color:var(--purple);}
+
+  .front.func{color:#fff; flex-direction:column; gap:1px;}
+  .front.func .ic{font-size:clamp(1.1rem,3.6vw,1.9rem); line-height:1;}
+  .front.func .lb{font-size:clamp(.58rem,2vw,.88rem); letter-spacing:1px;}
+  .front.func.g0{background:linear-gradient(180deg,#ef5350,#b71c1c);}
+  .front.func.g1{background:linear-gradient(180deg,#42a5f5,#1565c0);}
+  .front.func.g2{background:linear-gradient(180deg,#66bb6a,#2e7d32);}
+  .front.func.g3{background:linear-gradient(180deg,#ab47bc,#6a1b9a);}
+
+  .card.done{cursor:default;}
+  .card.done .front{
+    background:#dfe6ec !important; color:#7b8794 !important;
+    box-shadow:inset 0 0 0 4px var(--ok), 0 0 16px #42a5f5cc;
+  }
+  .card.done .front::after{
+    content:"\2713"; position:absolute; top:2px; right:5px;
+    font-size:clamp(.7rem,2.2vw,1rem); color:var(--ok);
+  }
+  .card.missed{cursor:default;}
+  .card.missed .front{
+    background:#fde3e6 !important; color:#b04a55 !important;
+    box-shadow:inset 0 0 0 4px var(--bad), 0 0 16px #ff174488;
+  }
+  .card.missed .front::after{
+    content:"\2715"; position:absolute; top:2px; right:5px;
+    font-size:clamp(.7rem,2.2vw,1rem); color:var(--bad);
+  }
+  .card.spent{cursor:default;}
+  .card.spent .front{opacity:.88;}
+  .card.spent .front::after{
+    content:"\2713"; position:absolute; top:2px; right:5px;
+    font-size:clamp(.7rem,2.2vw,1rem); color:#fff;
+    text-shadow:0 1px 3px #000c;
+  }
+  .board.locked{pointer-events:none;}
+
+  /* ---------- 底部選單 ---------- */
+  .panel{
+    position:fixed; left:0; right:0; bottom:0; z-index:40;
+    background:rgba(10,28,48,.98); border-top:3px solid var(--gold);
+    padding:5px 10px 6px; box-shadow:0 -6px 24px #000b;
+  }
+  .panel .ph{
+    text-align:center; font-weight:900; font-size:clamp(.78rem,2.5vw,1rem);
+    margin-bottom:4px; letter-spacing:1px; line-height:1.2;
+  }
+  .panel .ph b{font-size:clamp(1rem,3.2vw,1.4rem); color:var(--gold);}
+  .pbody{max-width:960px; margin:0 auto; display:flex; gap:7px; justify-content:center; flex-wrap:wrap;}
+  .pbtn{
+    flex:1 1 0; min-width:90px; max-width:220px; min-height:44px;
+    background:#1c4b7a; border:3px solid #3d7eb8; border-radius:10px;
+    font-size:clamp(.85rem,2.8vw,1.2rem); font-weight:900; padding:8px 4px;
+    transition:.15s; line-height:1.25;
+  }
+  .pbtn:active{transform:scale(.97);}
+  .pbtn:hover:not(:disabled){border-color:var(--gold);}
+  .pbtn:disabled{opacity:.3; cursor:default;}
+  .pbtn.p0{background:linear-gradient(180deg,#e53935,#a31212); border-color:#ff8a80;}
+  .pbtn.p1{background:linear-gradient(180deg,#1e88e5,#0d47a1); border-color:#82b1ff;}
+  .pbtn.p2{background:linear-gradient(180deg,#43a047,#1b5e20); border-color:#a5d6a7;}
+  .pbtn.p3{background:linear-gradient(180deg,#8e24aa,#4a148c); border-color:#ce93d8;}
+  .pbtn.own{border-color:var(--gold); box-shadow:0 0 0 3px #ffd60055;}
+  .pbtn.ok{background:var(--green); border-color:#a5d6a7;}
+  .pbtn.bad{background:var(--bad); border-color:#ff8a80;}
+  .pbtn.gold{background:linear-gradient(180deg,#f9a825,#e65100); border-color:#ffe082;}
+
+  /* ---------- 結算 ---------- */
+  .overlay{
+    position:fixed; inset:0; background:rgba(3,10,20,.95); z-index:60;
+    display:flex; align-items:center; justify-content:center; padding:14px;
+  }
+  .endbox{
+    width:100%; max-width:520px; background:var(--panel);
+    border:5px solid var(--gold); border-radius:20px; padding:20px 16px; text-align:center;
+  }
+  .final{font-size:clamp(1.4rem,6vw,2.4rem); font-weight:900; color:var(--gold); margin-bottom:12px;}
+  .frow{display:flex; gap:7px; margin-bottom:14px;}
+  .frow div{flex:1; border-radius:12px; padding:9px 3px; border:4px solid #fff4; font-weight:900;}
+  .frow .n{font-size:clamp(.62rem,2.2vw,.9rem);}
+  .frow .s{font-size:clamp(1.1rem,4.2vw,1.9rem); font-variant-numeric:tabular-nums;}
+  .win{box-shadow:0 0 0 4px var(--gold), 0 0 26px var(--gold);}
+  .best{font-size:clamp(.8rem,2.6vw,.95rem); color:#8fa6bd; font-weight:800; margin-bottom:8px;}
+  .best b{color:#a5d6a7;}
+  .btn{
+    display:inline-block; margin-top:8px; padding:11px 30px; min-height:50px;
+    font-size:clamp(1rem,3.4vw,1.4rem); font-weight:900; letter-spacing:2px;
+    border-radius:12px; background:var(--gold); color:#111; border:3px solid #fff8;
+    box-shadow:0 5px 0 #a37f00;
+  }
+  .btn:active{transform:translateY(4px); box-shadow:0 1px 0 #a37f00;}
+
+  @media (max-width:620px){
+    :root{--bw:min(100%, calc((100vh - 355px) * 1.0667));}
+    .topbar{flex-wrap:wrap;}
+    .topbar .tg, .topbar .tg.restart{flex:1 1 calc(50% - 3px); white-space:normal; min-height:34px; font-size:.72rem;}
+    .board{gap:5px;}
+    .face{border-radius:8px; border-width:2px; font-size:clamp(.52rem,2.4vw,.85rem); padding:3px 2px;}
+    .pbtn{min-width:70px; font-size:clamp(.72rem,2.4vw,1rem);}
+  }
+</style>
+</head>
+<body>
+
+<div class="title">BAA BOOZLE · HIBERNATION 翻牌遊戲</div>
+
+<div class="topbar">
+  <button class="tg restart" id="restartBtn">↻ 重來</button>
+  <button class="tg on" id="tgSnd">🔊 音效</button>
+  <button class="tg on" id="tgSpk">🗣 朗讀</button>
+</div>
+
+<div class="players" id="players"></div>
+<div class="status" id="status"></div>
+<div class="board" id="board"></div>
+
+<div class="panel hidden" id="panel">
+  <div class="ph" id="pHead"></div>
+  <div class="pbody" id="pBody"></div>
+</div>
+
+<div class="overlay hidden" id="endScreen">
+  <div class="endbox">
+    <div class="final" id="finalText"></div>
+    <div class="frow" id="frow"></div>
+    <div class="best">最佳紀錄 BEST：<b id="rBest">--</b></div>
+    <button class="btn" id="againBtn">PLAY AGAIN</button>
+  </div>
+</div>
+
+<script>
+/* =========================================================
+   牌面資料 —— 換單元只改 WORDS 與 FUNCS
+   ========================================================= */
+const WORDS = [
+  { en: "hibernation", zh: "冬眠" },
+  { en: "last",        zh: "持續" },
+  { en: "slowly",      zh: "慢慢地" },
+  { en: "heart beat",  zh: "心跳" },
+  { en: "stay alive",  zh: "活下去" },
+  { en: "stays",       zh: "停留" },
+  { en: "safe place",  zh: "安全的地方" },
+  { en: "squirrels",   zh: "松鼠" },
+  { en: "raccoons",    zh: "浣熊" },
+  { en: "skunks",      zh: "臭鼬" }
+];
+
+const FUNCS = [
+  { ic:"💰", nm:"50 金",  ds:"自己 +50 分、+50 金幣",          fx:"coin"   },
+  { ic:"🎯", nm:"+50 分", ds:"自己 +50 分",                  fx:"self50" },
+  { ic:"🎁", nm:"給分",   ds:"選一組送分給他",               fx:"give"   },
+  { ic:"🐴", nm:"偷分",   ds:"偷走別組的分數",               fx:"steal"  },
+  { ic:"💣", nm:"炸彈",   ds:"自己分數與金幣全部炸光",       fx:"bomb"   },
+  { ic:"🔄", nm:"換分",   ds:"和另一組交換分數",             fx:"swap"   },
+  { ic:"🍀", nm:"幸運",   ds:"隨機 +10 / +30 / +50",         fx:"lucky"  },
+  { ic:"⭐", nm:"加倍",   ds:"當下的分數直接 ×2",            fx:"double" },
+  { ic:"👑", nm:"第一名", ds:"分數直接超過所有組，穩拿第一", fx:"king"   },
+  { ic:"🚫", nm:"0 分",   ds:"什麼都沒有",                   fx:"zero"   }
+];
+
+const TEAMS = [
+  { nm:"紅隊", col:"#e53935" },
+  { nm:"藍隊", col:"#1e88e5" },
+  { nm:"綠隊", col:"#43a047" },
+  { nm:"紫隊", col:"#8e24aa" }
+];
+const AMOUNTS = [10, 20, 50];
+const BEST_KEY = 'baaSimpleBest';
+/* ======================================================= */
+</script>
+
+<script>
+/* ================= 音效 ================= */
+let actx = null, sndOn = true;
+function audio(){
+  if(!sndOn) return null;
+  if(!actx){ try{ actx = new (window.AudioContext || window.webkitAudioContext)(); }catch(e){ return null; } }
+  if(actx.state === 'suspended') actx.resume();
+  return actx;
+}
+function tone(f, at, d, t, v){
+  const c = audio(); if(!c) return;
+  const o = c.createOscillator(), g = c.createGain();
+  o.type = t || 'triangle'; o.frequency.value = f;
+  g.gain.setValueAtTime(0.0001, c.currentTime + at);
+  g.gain.exponentialRampToValueAtTime(v, c.currentTime + at + 0.02);
+  g.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + at + d);
+  o.connect(g); g.connect(c.destination);
+  o.start(c.currentTime + at); o.stop(c.currentTime + at + d + 0.05);
+}
+function noise(dur, vol){
+  const c = audio(); if(!c) return;
+  const len = Math.floor(c.sampleRate * dur);
+  const b = c.createBuffer(1, len, c.sampleRate), d = b.getChannelData(0);
+  for(let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+  const s = c.createBufferSource(); s.buffer = b;
+  const g = c.createGain(); g.gain.setValueAtTime(vol, c.currentTime);
+  const f = c.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 1400;
+  s.connect(f); f.connect(g); g.connect(c.destination); s.start();
+}
+const S = {
+  flip(){ tone(760, 0, .07, 'square', .10); },
+  ok(){ [523,659,784,1046,1318].forEach((f,i)=> tone(f, i*.09, .20, 'triangle', .28)); },
+  no(){ tone(196, 0, .26, 'sawtooth', .20); tone(147, .14, .36, 'sawtooth', .20); },
+
+  coin(){ [988,1319,1568,2093].forEach((f,i)=> tone(f, i*.05, .15, 'square', .16)); },
+
+  /* +50 分：加大音量、厚重的上行和弦 */
+  big50(){
+    const seq = [523,659,784,1046,1318,1568];
+    seq.forEach((f,i)=> tone(f,  i*.075, .32, 'triangle', .36));
+    seq.forEach((f,i)=> tone(f * .5, i*.075, .32, 'sawtooth', .17));
+    seq.forEach((f,i)=> tone(f * 2,  i*.075, .18, 'sine',     .10));
+    [1568,2093,2637].forEach((f,i)=> tone(f, .48 + i*.07, .34, 'square', .17));
+    tone(98, 0, .95, 'sine', .32);
+  },
+
+  /* 被偷分：悲慘的下行哭聲 */
+  sad(){
+    const mel = [659,587,523,440,392,349];
+    mel.forEach((f,i)=>{
+      tone(f,       i*.145, .34, 'triangle', .34);
+      tone(f * 1.5, i*.145, .22, 'sine',     .10);
+    });
+    tone(174, .86, .62, 'sawtooth', .15);
+    tone(131, .92, .58, 'sine',     .17);
+    tone(87,  1.00, .60, 'sine',    .12);
+  },
+  steal(){ [440,554,659,880].forEach((f,i)=> tone(f, i*.07, .16, 'sawtooth', .17)); },
+
+  /* 炸彈：超大音量 */
+  bomb(){
+    noise(.90, .90);
+    tone(420, 0,    .14, 'square',   .28);
+    tone(120, 0,    .55, 'sawtooth', .42);
+    tone(61,  .04,  .95, 'square',   .34);
+    tone(40,  .10, 1.05, 'sine',     .44);
+    tone(24,  .20, 1.05, 'sine',     .28);
+  },
+
+  /* 通關：頒獎典禮小號聲 */
+  fanfare(){
+    [523,587,659,784].forEach((f,i)=> tone(f, i*.11, .20, 'sawtooth', .24));
+    tone(1046, .46, .26, 'sawtooth', .28);
+    tone(1318, .58, .30, 'sawtooth', .30);
+    [1318,1046,784,659,523].forEach((f,i)=> tone(f, .62 + i*.055, .18, 'sawtooth', .22));
+    [523,659,784,1046].forEach((f,i)=> tone(f, 1.16 + i*.13, .34, 'triangle', .30));
+    [523,659,784,1046,1318,1568,2093].forEach((f,i)=> tone(f, 1.74 + i*.11, .34, 'triangle', .28));
+    [261,329,392,523].forEach((f,i)=> tone(f, 1.74 + i*.11, .34, 'sine',     .22));
+    tone(65, 1.74, 1.20, 'sine', .30);
+  },
+  win(){ S.fanfare(); }
+};
+
+/* ================= 語音 ================= */
+let spkOn = true;
+function isCJK(s){ return /[\u2E80-\u9FFF\u3000-\u303F\uFF00-\uFFEF]/.test(s); }
+function speak(text){
+  if(!spkOn || typeof window.speechSynthesis === 'undefined') return;
+  try{ window.speechSynthesis.cancel(); }catch(e){}
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = isCJK(text) ? 'zh-TW' : 'en-US'; u.rate = 1; u.pitch = 1;
+  const apply = ()=>{
+    const vs = window.speechSynthesis.getVoices() || []; if(!vs.length) return;
+    const p = isCJK(text) ? 'zh' : 'en';
+    const v = vs.find(x=> x.lang && x.lang.toLowerCase().indexOf(p) === 0);
+    if(v) u.voice = v;
+    window.speechSynthesis.speak(u);
+  };
+  if((window.speechSynthesis.getVoices() || []).length > 0) apply();
+  else{
+    let n = 0;
+    const vt = setInterval(()=>{
+      n++;
+      if((window.speechSynthesis.getVoices() || []).length > 0 || n > 40){ clearInterval(vt); apply(); }
+    }, 100);
+  }
+}
+
+/* ================= 工具 ================= */
+function shuffle(a){
+  a = a.slice();
+  for(let i = a.length - 1; i > 0; i--){
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+const $ = id => document.getElementById(id);
+
+/* ================= 狀態 ================= */
+let CARDS = [], turn = 0, busy = false;
+let score = [0,0,0,0], coin = [0,0,0,0];
+let cur = null, step = '', pending = null;
+
+function renderPlayers(){
+  const box = $('players');
+  box.innerHTML = '';
+  const top = Math.max.apply(null, score);
+  TEAMS.forEach((t, i)=>{
+    const behind = (score[i] < top);
+    const d = document.createElement('div');
+    d.className = 'pl' + (i === turn ? ' on' : '') + (behind ? ' out' : '');
+    d.style.borderColor = t.col;
+    d.innerHTML = '<div class="n">' + t.nm + '</div>' +
+                  '<div class="s">' + score[i] + '</div>' +
+                  '<div class="g">💰 ' + coin[i] + '</div>';
+    box.appendChild(d);
+  });
+}
+function say(t){ $('status').innerHTML = t; }
+
+/* ================= 牌桌 ================= */
+function buildDeck(){
+  let list = [];
+  WORDS.forEach(w=> list.push({ type:'word', en:w.en, zh:w.zh, done:false }));
+  FUNCS.forEach(f=> list.push({ type:'func', f:f }));
+  list = shuffle(list);
+  CARDS = [];
+  for(let g = 0; g < 4; g++)
+    for(let col = 0; col < 5; col++){
+      const c = list[g * 5 + col];
+      c.grp = g; c.col = col;
+      CARDS.push(c);
+    }
+  shuffle(CARDS).forEach((c, i)=>{ c.no = i + 1; });
+}
+function renderDeck(){
+  const b = $('board');
+  b.innerHTML = '';
+  CARDS.forEach(c=>{
+    const el = document.createElement('button');
+    el.className = 'card g' + c.grp + (c.done ? ' done' : '');
+    el.setAttribute('aria-label', '第' + (c.grp+1) + '列 第' + (c.col+1) + '欄');
+    const face = c.type === 'word'
+      ? '<span class="face front word">' + c.en + '</span>'
+      : '<span class="face front func"><span class="ic">' + c.f.ic + '</span>' +
+        '<span class="lb">' + c.f.nm + '</span></span>';
+    el.innerHTML = '<span class="inner">' + face +
+      '<span class="face back"><span class="no">' + c.no + '</span>' +
+      '<span class="sub">CARD</span></span></span>';
+    el.addEventListener('click', ()=> onCard(c));
+    c.el = el;
+    b.appendChild(el);
+  });
+}
+
+/* ================= 開局 ================= */
+function newGame(){
+  turn = 0; busy = false; cur = null; step = ''; pending = null;
+  score = [0,0,0,0]; coin = [0,0,0,0];
+  closePanel();
+  $('endScreen').classList.add('hidden');
+  buildDeck(); renderDeck(); renderPlayers();
+  nextTurn();
+}
+function nextTurn(){
+  busy = false; cur = null; step = ''; pending = null;
+  closePanel();
+  const left = CARDS.filter(c=> !c.used).length;
+  const round = Math.floor((20 - left) / 4) + 1;
+  renderPlayers();
+  say('第 ' + round + ' 回合：<span class="hi">' + TEAMS[turn].nm +
+      '</span> 請翻開 1 張牌　（還剩 ' + left + ' 張牌）');
+}
+
+/* ================= 翻牌 ================= */
+function onCard(c){
+  if(busy || c.used || c.up) return;
+  c.up = true;
+  c.el.classList.add('flip');
+  S.flip();
+  busy = true;
+  cur = c;
+  if(c.type === 'word'){
+    speak(c.en);
+    askWord();
+  }else{
+    c.used = true; c.el.classList.add('spent');   /* 功能牌翻過就算用掉 */
+    runFunc();
+  }
+}
+
+/* ================= 英文卡：選中文 ================= */
+function askWord(){
+  const c = cur, p = turn;
+  const others = shuffle(WORDS.filter(w=> w.zh !== c.zh)).slice(0, 3);
+  const opts = shuffle([c.zh].concat(others.map(w=> w.zh)));
+  openPanel('<span class="hi">' + TEAMS[p].nm + '</span>　請選 <b>' + c.en + '</b> 的意思',
+    opts.map(t=>({ t:t, cls:'', fn:()=> answer(t) })));
+  speak(c.en);
+}
+function answer(t){
+  const c = cur, p = turn;
+  if(!c || c.used) return;              /* 防連點 */
+  const ok = (t === c.zh);
+  c.used = true;
+  if(ok){
+    c.done = true; c.el.classList.add('done');
+    score[p] += 20;
+    S.ok();
+    renderPlayers();
+    setPanelResult('<b style="color:#a5d6a7">答對！+20 分</b>', ()=> endTurn());
+  }else{
+    c.missed = true; c.el.classList.add('missed');
+    const lost = Math.min(score[p], 10);
+    score[p] -= lost;
+    S.no();
+    renderPlayers();
+    setPanelResult('<b style="color:#ef9a9a">答錯！−' + lost + ' 分</b>　正確答案：' + c.zh,
+      ()=> endTurn());
+  }
+}
+
+/* ================= 功能牌 ================= */
+function runFunc(){
+  const f = cur.f, p = turn;
+  switch(f.fx){
+    case 'coin':   score[p] += 50; coin[p] += 50; S.big50(); renderPlayers();
+      done('💰 自己 +50 分、+50 金幣'); break;
+    case 'self50': score[p] += 50; S.big50(); renderPlayers();
+      done('自己 +50 分'); break;
+    case 'zero': S.no();
+      done('0 分，什麼都沒有'); break;
+    case 'double': {
+      const was = score[p];
+      score[p] = was * 2;
+      if(was === 0){ score[p] = 0; }
+      S.big50(); renderPlayers();
+      done(was === 0 ? '現在是 0 分，加倍還是 0 分…' : '當下 ' + was + ' 分 → 加倍成 ' + score[p] + ' 分！');
+      break;
+    }
+    case 'lucky': {
+      const r = shuffle([10,30,50])[0];
+      score[p] += r; S.coin(); renderPlayers();
+      done('幸運！+' + r + ' 分'); break;
+    }
+    case 'bomb':
+      score[p] = 0; coin[p] = 0; S.bomb(); renderPlayers();
+      done('💥 自己的分數與金幣全炸光了！'); break;
+    case 'king': {
+      let top = -1;
+      score.forEach(function(v, i){ if(i !== p && v > top) top = v; });
+      const t = top + 10;
+      score[p] = t;
+      S.big50(); renderPlayers();
+      done('👑 直接登冠！' + t + ' 分，穩拿第一名');
+      break;
+    }
+    case 'give':  step = 'giveWho';  askTeam('要給哪一組？'); break;
+    case 'steal': step = 'stealWho'; askTeam('要偷哪一組？'); break;
+    case 'swap':  step = 'swapWho';  askTeam('要和哪一組交換分數？'); break;
+  }
+}
+function askTeam(head){
+  openPanel('<span class="hi">' + TEAMS[turn].nm + '</span>　' + head,
+    TEAMS.map((t, i)=>({
+      t: t.nm + '　' + score[i] + ' 分',
+      cls: 'p' + i + (i === turn ? ' own' : ''),
+      dis: (i === turn),
+      fn: ()=> pickTeam(i)
+    })));
+}
+function pickTeam(i){
+  if(i === turn) return;
+  S.flip();
+  if(step === 'giveWho'){ pending = i; step = 'giveAmt'; askAmount('要給幾分？', applyGive); }
+  else if(step === 'stealWho'){ pending = i; step = 'stealAmt'; askAmount('要偷幾分？', applySteal); }
+  else if(step === 'swapWho'){ doSwap(i); }
+}
+function askAmount(head, fn){
+  openPanel('<span class="hi">' + TEAMS[turn].nm + '</span>　' + head +
+            '（對象：' + TEAMS[pending].nm + '）',
+    AMOUNTS.map(a=>({ t:a + ' 分', cls:'gold', fn:()=> fn(a) })));
+}
+function applyGive(a){
+  score[turn] = Math.max(0, score[turn] - a);
+  score[pending] += a;
+  S.coin(); renderPlayers();
+  done('給 ' + TEAMS[pending].nm + ' ' + a + ' 分');
+}
+function applySteal(a){
+  const got = Math.min(score[pending], a);
+  score[pending] -= got;
+  score[turn] += got;
+  S.steal();
+  setTimeout(()=> S.sad(), 260);
+  renderPlayers();
+  done('從 ' + TEAMS[pending].nm + ' 偷到 ' + got + ' 分');
+}
+function doSwap(i){
+  const t = score[turn];
+  score[turn] = score[i]; score[i] = t;
+  S.steal(); renderPlayers();
+  done('和 ' + TEAMS[i].nm + ' 交換分數！');
+}
+
+/* ================= 面板 ================= */
+function openPanel(head, items){
+  $('pHead').innerHTML = head;
+  const b = $('pBody');
+  b.innerHTML = '';
+  items.forEach(it=>{
+    const el = document.createElement('button');
+    el.className = 'pbtn ' + (it.cls || '');
+    el.textContent = it.t;
+    if(it.dis) el.disabled = true;
+    el.onclick = it.fn;
+    b.appendChild(el);
+  });
+  $('panel').classList.remove('hidden');
+}
+function setPanelResult(html, after){
+  openPanel(html, []);
+  setTimeout(()=>{ closePanel(); if(after) after(); }, 1300);
+}
+function done(msg){
+  S.flip();
+  openPanel('<span class="hi">' + TEAMS[turn].nm + '</span>　' + msg + '　<b>下一組</b>', []);
+  setTimeout(()=>{ closePanel(); endTurn(); }, 1300);
+}
+function closePanel(){ $('panel').classList.add('hidden'); }
+
+/* ================= 回合結束 ================= */
+function endTurn(){
+  closePanel();
+  turn = (turn + 1) % 4;
+  renderPlayers();
+  const left = CARDS.filter(c=> !c.used).length;
+  if(left <= 0){ endGame(); return; }
+  nextTurn();
+}
+
+/* ================= 結算 ================= */
+function endGame(){
+  S.win();
+  const best = Math.max.apply(null, score);
+  const win = score.indexOf(best);
+  $('finalText').textContent = TEAMS[win].nm + ' 最高分！';
+  const box = $('frow');
+  box.innerHTML = '';
+  score.forEach((v, i)=>{
+    const d = document.createElement('div');
+    d.className = i === win ? 'win' : '';
+    d.style.background = TEAMS[i].col;
+    d.innerHTML = '<div class="n">' + TEAMS[i].nm + '</div><div class="s">' + v + '</div>';
+    box.appendChild(d);
+  });
+  let nb = false;
+  try{
+    const old = parseInt(localStorage.getItem(BEST_KEY) || '0', 10);
+    if(!old || best > old){ localStorage.setItem(BEST_KEY, String(best)); nb = true; }
+    $('rBest').textContent = (old && !nb ? old : best) + (nb ? ' ★ NEW!' : '');
+  }catch(e){ $('rBest').textContent = String(best); }
+  $('endScreen').classList.remove('hidden');
+}
+
+/* ================= 事件 ================= */
+$('restartBtn').onclick = function(){ S.flip(); newGame(); };
+$('againBtn').onclick = function(){ S.flip(); newGame(); };
+$('tgSnd').onclick = function(){
+  sndOn = !sndOn;
+  this.classList.toggle('on', sndOn);
+  this.textContent = sndOn ? '🔊 音效' : '🔇 音效';
+  if(sndOn){ audio(); S.flip(); }
+};
+$('tgSpk').onclick = function(){
+  spkOn = !spkOn;
+  this.classList.toggle('on', spkOn);
+  this.textContent = spkOn ? '🗣 朗讀' : '🔇 朗讀';
+  if(!spkOn){ try{ window.speechSynthesis.cancel(); }catch(e){} }
+};
+
+renderPlayers();
+newGame();
+</script>
+</body>
+</html>
